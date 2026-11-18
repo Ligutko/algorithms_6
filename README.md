@@ -19,12 +19,15 @@ python lab6_maxflow.py base      # базова задача і дані для 
 python lab6_maxflow.py variant   # варіант 2
 python lab6_maxflow.py compare   # порівняння бази і варіанта
 python lab6_maxflow.py sens      # потік залежно від зменшення ребер Складу 4
-python lab6_maxflow.py check     # перевірка бібліотекою networkx
+python lab6_maxflow.py reroute   # перенаправлення потоку через зворотне ребро
+python lab6_maxflow.py check     # перевірка networkx: 2 мережі з умови і 1000 випадкових
 
 python lab6_trie.py template     # тести з шаблону
+python lab6_trie.py suffix       # базові методи: кілька слів з одним закінченням, регістр
 python lab6_trie.py variant      # тести методів варіанта 2
 python lab6_trie.py errors       # некоректні вхідні дані
 python lab6_trie.py check        # порівняння з прямим перебором
+python lab6_trie.py scale        # час методів на дереві з ~100 000 слів
 ```
 
 Без аргументу кожна програма виконує всі розділи.

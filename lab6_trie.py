@@ -7,7 +7,7 @@
 Базовий клас Trie (файл trie.py) взято з репозиторію прикладів курсу
 https://github.com/zhukov-vntu/mlta-lr6 без змін.
 
-Запуск: python lab6_trie.py [template | variant | errors | check]
+Запуск: python lab6_trie.py [template | suffix | variant | errors | check | scale]
 Без аргументу виконуються всі розділи.
 """
 import os
@@ -122,6 +122,71 @@ def run_template():
     print()
 
 
+SUFFIX_WORDS = ["ion", "lion", "onion", "nation", "Nation", "station", "NATION",
+                "apple"]
+
+
+def run_suffix():
+    """Базові методи на наборі, де суфікс має кілька слів, збігається з
+    цілим словом, відрізняється регістром і довший за слова."""
+    print("=" * 78)
+    print("Базові методи: кілька слів з одним закінченням, регістр, ціле слово")
+    print("=" * 78)
+    trie = make_trie(SUFFIX_WORDS)
+    print(f"Слова: {SUFFIX_WORDS}")
+    for pattern, exp in [("ion", 6), ("ation", 3), ("Nation", 1), ("ION", 1),
+                         ("onion", 1), ("stations", 0)]:
+        show(f'count_words_with_suffix("{pattern}")', exp,
+             trie.count_words_with_suffix(pattern))
+    for prefix, exp in [("ion", True), ("Na", True), ("nA", False),
+                        ("stations", False)]:
+        show(f'has_prefix("{prefix}")', exp, trie.has_prefix(prefix))
+    print()
+
+
+def best_time(fn, repeat):
+    """Найменший час одного виклику fn() у мікросекундах із repeat запусків."""
+    import time
+    best = float("inf")
+    for _ in range(repeat):
+        t0 = time.perf_counter()
+        result = fn()
+        best = min(best, time.perf_counter() - t0)
+    return result, best * 1_000_000
+
+
+def run_scale(n_words=100_000, seed=6, prefix="abc", suffix="abc"):
+    """Час методів на дереві з n_words випадкових слів (a-z, довжина 3-10)
+    порівняно з переглядом списку слів. Повертає словник результатів."""
+    rng = random.Random(seed)
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    words = sorted({"".join(rng.choice(letters) for _ in range(rng.randint(3, 10)))
+                    for _ in range(n_words)})
+    trie = make_trie(words)
+    rows = [
+        ("count_words_starting_with", f'"{prefix}"',
+         *best_time(lambda: trie.count_words_starting_with(prefix), 200)),
+        ("has_prefix", f'"{prefix}"', *best_time(lambda: trie.has_prefix(prefix), 200)),
+        ("список: startswith", f'"{prefix}"',
+         *best_time(lambda: sum(w.startswith(prefix) for w in words), 15)),
+        ("count_words_with_suffix", f'"{suffix}"',
+         *best_time(lambda: trie.count_words_with_suffix(suffix), 5)),
+        ("список: endswith", f'"{suffix}"',
+         *best_time(lambda: sum(w.endswith(suffix) for w in words), 15)),
+    ]
+    assert rows[0][2] == rows[2][2] and rows[3][2] == rows[4][2]
+    assert rows[1][2] == (rows[0][2] > 0)
+    print("=" * 78)
+    print(f"Масштаб: дерево з {len(words)} випадкових слів (a-z, довжина 3-10)")
+    print("=" * 78)
+    print(f"  {'Метод':<28}{'Аргумент':<10}{'Результат':>10}{'Час, мкс':>12}")
+    for name, arg, res, us in rows:
+        shown = f"{us:.1f}" if us < 100 else f"{us:.0f}"
+        print(f"  {name:<28}{arg:<10}{str(res):>10}{shown:>12}")
+    print()
+    return {"n_words": len(words), "rows": rows}
+
+
 def run_variant():
     """Тести методів варіанта 2."""
     print("=" * 78)
@@ -203,9 +268,13 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     if mode in ("template", "all"):
         run_template()
+    if mode in ("suffix", "all"):
+        run_suffix()
     if mode in ("variant", "all"):
         run_variant()
     if mode in ("errors", "all"):
         run_errors()
     if mode in ("check", "all"):
         run_check()
+    if mode in ("scale", "all"):
+        run_scale()

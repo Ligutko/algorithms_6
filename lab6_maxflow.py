@@ -3,7 +3,7 @@
 Завдання 1. Логістична мережа (Max Flow), алгоритм Едмондса-Карпа.
 Варіант 2: пропускну здатність ребер "Склад 4 -> Магазини" зменшено на 50%.
 
-Запуск: python lab6_maxflow.py [base | variant | compare | sens | check]
+Запуск: python lab6_maxflow.py [base | variant | compare | sens | reroute | check]
 Без аргументу виконуються всі розділи.
 """
 import sys
@@ -286,24 +286,92 @@ def print_sensitivity():
     print()
 
 
+def nx_max_flow(edges):
+    """Максимальний потік бібліотекою networkx для тієї самої мережі."""
+    import networkx as nx
+    g = nx.DiGraph()
+    for u, v, c in edges:
+        g.add_edge(u, v, capacity=c)
+    for t in TERMINALS:
+        g.add_edge(SOURCE_NAME, t, capacity=INF)
+    for s in STORES:
+        g.add_edge(s, SINK_NAME, capacity=INF)
+    value, _ = nx.maximum_flow(g, SOURCE_NAME, SINK_NAME)
+    return value
+
+
+def random_check(trials=1000, seed=6):
+    """Едмондс-Карп проти networkx на випадкових пропускних здатностях тієї
+    самої мережі (1..40) з випадковим зменшенням ребер Складу 4 (0..100%).
+    Повертає (кількість мереж, кількість розбіжностей, найменший і найбільший потік)."""
+    import random
+    rng = random.Random(seed)
+    bad, flows = 0, []
+    for _ in range(trials):
+        edges = [(u, v, rng.randint(1, 40)) for u, v, _ in BASE_EDGES]
+        edges = reduce_warehouse(edges, percent=rng.randint(0, 100))
+        own = solve(edges)["max_flow"]
+        if abs(own - nx_max_flow(edges)) > 1e-9:
+            bad += 1
+        flows.append(own)
+    return trials, bad, min(flows), max(flows)
+
+
 def print_check():
     """Незалежна перевірка: networkx.maximum_flow на тих самих ребрах."""
-    import networkx as nx
     print("=" * 70)
     print("Перевірка бібліотекою networkx")
     print("=" * 70)
     for title, edges in [("База", BASE_EDGES), ("Варіант 2", reduce_warehouse(BASE_EDGES))]:
-        g = nx.DiGraph()
-        for u, v, c in edges:
-            g.add_edge(u, v, capacity=c)
-        for t in TERMINALS:
-            g.add_edge(SOURCE_NAME, t, capacity=INF)
-        for s in STORES:
-            g.add_edge(s, SINK_NAME, capacity=INF)
-        value, _ = nx.maximum_flow(g, SOURCE_NAME, SINK_NAME)
+        value = nx_max_flow(edges)
         own = solve(edges)["max_flow"]
         print(f"  {title}: networkx = {fmt(value)}, Едмондс-Карп = {fmt(own)}, "
               f"{'збігається' if value == own else 'НЕ збігається'}")
+    n, bad, lo, hi = random_check()
+    print(f"  Випадкові мережі: {n}, потік від {fmt(lo)} до {fmt(hi)}, "
+          f"розбіжностей: {bad}")
+    print()
+
+
+# Мережа для перевірки зворотних ребер: Термінал 1 може возити на обидва
+# склади, Термінал 2 - лише на Склад 1. У кожного термінала 10 одиниць
+# товару, кожен склад приймає 10 одиниць.
+REROUTE_NODES = ["Джерело", "Термінал 1", "Термінал 2", "Склад 1", "Склад 2", "Стік"]
+REROUTE_EDGES = [
+    ("Джерело", "Термінал 1", 10), ("Джерело", "Термінал 2", 10),
+    ("Термінал 1", "Склад 1", 10), ("Термінал 1", "Склад 2", 10),
+    ("Термінал 2", "Склад 1", 10),
+    ("Склад 1", "Стік", 10), ("Склад 2", "Стік", 10),
+]
+
+
+def reroute_example():
+    """Едмондс-Карп на мережі REROUTE_*; повертає потік, кроки і матриці."""
+    idx = {name: i for i, name in enumerate(REROUTE_NODES)}
+    cap = [[0] * len(REROUTE_NODES) for _ in REROUTE_NODES]
+    for u, v, c in REROUTE_EDGES:
+        cap[idx[u]][idx[v]] = c
+    max_flow, flow, steps = edmonds_karp(cap, idx["Джерело"], idx["Стік"])
+    return max_flow, flow, steps, cap, idx
+
+
+def print_reroute():
+    max_flow, flow, steps, cap, idx = reroute_example()
+    print("=" * 70)
+    print("Перевірка зворотних ребер: перенаправлення товару")
+    print("=" * 70)
+    for k, (path, pf, total) in enumerate(steps, 1):
+        parts = [REROUTE_NODES[path[0]]]
+        for u, v in zip(path, path[1:]):
+            arrow = " -> " if cap[u][v] > 0 else " <= "
+            parts.append(arrow + REROUTE_NODES[v])
+        print(f"  Крок {k}: {''.join(parts)}  (потік {fmt(pf)}, сумарний {fmt(total)})")
+    print("  ('<=' - рух зворотним ребром, тобто скасування раніше відправленого потоку)")
+    print(f"  Максимальний потік: {fmt(max_flow)}")
+    print("  Підсумковий потік по маршрутах:")
+    for u, v, c in REROUTE_EDGES:
+        if u != "Джерело" and v != "Стік":
+            print(f"    {u} -> {v}: {fmt(flow[idx[u]][idx[v]])} / {fmt(c)}")
     print()
 
 
@@ -320,5 +388,7 @@ if __name__ == "__main__":
         print_compare(base, var)
     if mode in ("sens", "all"):
         print_sensitivity()
+    if mode in ("reroute", "all"):
+        print_reroute()
     if mode in ("check", "all"):
         print_check()
